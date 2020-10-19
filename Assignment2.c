@@ -15,6 +15,7 @@
 #define THRESHOLD 80
 
 void *baseStationListener(void *arg);
+void *infraredSatellite(void *arg);
 void *groundSensorListener(void *arg);
 void *groundSensorReading(void *arg);
 
@@ -23,13 +24,23 @@ int temp = 0; // Temperature reading for each node
 int adjacent[4]; // 0: top, 1: bottom, 2: left, 3: right
 int reply[4];
 int terminate_flag = 0; // Termination flag
+int nrows, ncols;
+int *satelite_temp; // latest infrared satelite reading for each sensor node
+int *satelite_time; // latest satelite scan time for each sensor node
 MPI_Comm comm2D;
 
+struct Report {
+	double time;
+	int temp;
+	int msg;
+	int adjacentRanks[4];
+	int adjacentTemps[4];
+};
 
 int main(int argc, char *argv[]) {
 
 	int ndims=2, size, my_rank, reorder, my_cart_rank, ierr, provided;
-	int nrows, ncols;
+	// int nrows, ncols;
 	
 	int dims[ndims],coord[ndims];
 	int wrap_around[ndims];
@@ -38,7 +49,18 @@ int main(int argc, char *argv[]) {
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+	/* Struct initialisation */
+	struct Report reports;
 	
+
+    /* Allocate satelite datas array */
+    satelite_temp = (int*)malloc(sizeof(int) * (size - 1));
+    satelite_time = (int*)malloc(sizeof(int) * (size - 1));
+	
+	
+
+
 	/* process command line arguments*/
 	if (argc == 3) {
 		nrows = atoi (argv[1]);
@@ -115,14 +137,19 @@ int main(int argc, char *argv[]) {
 	    /*************************************************************************************/
 		
 	    MPI_Comm_free( &comm2D );
+		
 	} else {
-	    // Base station code (Last rank)
+	    /* Base station code (Last rank) */
 	    
-	    // pthread_t tid[2];
-	    // pthread_create(&tid[0], NULL, baseStationListener, &size);
-	    // pthread_join(tid[0], NULL);
+	    pthread_t tid[2];
+	    pthread_create(&tid[0], NULL, baseStationListener, &size);
+		pthread_create(&tid[1], NULL, infraredSatellite, &size);
+	    pthread_join(tid[0], NULL);
+		pthread_join(tid[1], NULL);
     }
 	
+    free(satelite_temp);
+    free(satelite_time);
 	MPI_Finalize();
 	return 0;
 }
@@ -152,6 +179,26 @@ void *baseStationListener(void *arg) {
 }
 
 
+void *infraredSatellite(void *arg) {
+    int *size = arg;
+    int rand_node;
+    time_t now;
+
+    /* Generate random row, col and temperature */
+    while (terminate_flag == 0) {
+		sleep(5);
+		unsigned int seed = time(NULL);
+		temp = rand_r(&seed) % 60 + 51;
+        now = time(NULL);
+		rand_node = rand_r(&seed) % (*size-1);
+
+        satelite_temp[rand_node] = temp;
+        satelite_time[rand_node] = now;
+    }
+	return NULL;
+}
+
+
 void *groundSensorListener(void *arg) {
 	int *rank = arg;
 
@@ -167,8 +214,8 @@ void *groundSensorListener(void *arg) {
 		MPI_Irecv(&temp_recv, 1, MPI_INT, MPI_ANY_SOURCE, REQUEST, comm2D, &recv_request);
 		MPI_Wait(&recv_request, &recv_status);
 
-		printf("Sensor %d: Request received from sensor %d\n", *rank, recv_status.MPI_SOURCE);
-		fflush(stdout);
+		// printf("Sensor %d: Request received from sensor %d\n", *rank, recv_status.MPI_SOURCE);
+		// fflush(stdout);
 
 		MPI_Isend(&temp, 1, MPI_INT, recv_status.MPI_SOURCE, REPLY, comm2D, &send_request);
 		MPI_Wait(&send_request, &send_status);
@@ -223,7 +270,6 @@ void *groundSensorReading(void *arg) {
 
 			MPI_Waitall(4, send_request, send_status);
 
-			
 		}
 	}
 

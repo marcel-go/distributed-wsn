@@ -28,14 +28,14 @@ MPI_Comm comm2D;
 
 int main(int argc, char *argv[]) {
 
-	int ndims=2, size, my_rank, reorder, my_cart_rank, ierr;
+	int ndims=2, size, my_rank, reorder, my_cart_rank, ierr, provided;
 	int nrows, ncols;
 	
 	int dims[ndims],coord[ndims];
 	int wrap_around[ndims];
 	
 	/* start up initial MPI environment */
-	MPI_Init(&argc, &argv);
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 	

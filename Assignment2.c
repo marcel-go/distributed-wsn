@@ -1,7 +1,7 @@
 #include <stdio.h>
-#include <math.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+#include <math.h>
 #include <mpi.h>
 #include <pthread.h>
 #include <time.h>
@@ -21,15 +21,16 @@ void *infraredSatellite(void *arg);
 void *groundSensorListener(void *arg);
 void *groundSensorReading(void *arg);
 void rankToCoord(int rank, int *coord);
+void timeToString(time_t rawTime, char *buffer);
 
 /* Initialise global variables */
 int temp = 0; // Temperature reading for each node
 int adjacent[4]; // 0: top, 1: bottom, 2: left, 3: right
 int reply[4];
-int terminate_flag = 0; // Termination flag
+int terminateFlag = 0; // Termination flag
 int nrows, ncols, size;
-int *satellite_temp; // latest infrared satellite reading for each sensor node
-time_t *satellite_time; // latest satellite scan time for each sensor node
+int *satelliteTemp; // latest infrared satellite reading for each sensor node
+time_t *satelliteTime; // latest satellite scan time for each sensor node
 MPI_Comm comm2D;
 MPI_Datatype ReportType;
 
@@ -43,7 +44,7 @@ typedef struct Report {
 
 int main(int argc, char *argv[]) {
 
-	int ndims=2, my_rank, reorder, my_cart_rank, ierr, provided;
+	int ndims=2, myRank, reorder, myCartRank, ierr, provided;
 	// int nrows, ncols;
 	
 	int dims[ndims],coord[ndims];
@@ -52,9 +53,9 @@ int main(int argc, char *argv[]) {
 	/* start up initial MPI environment */
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+	MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
 
-	/* Create custom MPI datatype for report */
+	/* Create custom MPI datatype for reports */
 	int blocksCount = 5;
 	int blocksLen[5] = {1, 1, 1, 4, 4};
 	MPI_Datatype types[5] = {MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
@@ -70,13 +71,13 @@ int main(int argc, char *argv[]) {
 	MPI_Type_commit(&ReportType);
 	
     /* Allocate satellite datas array */
-    satellite_temp = (int*)malloc(sizeof(int) * (size - 1));
-    satellite_time = (time_t*)malloc(sizeof(time_t) * (size - 1));
+    satelliteTemp = (int*)malloc(sizeof(int) * (size - 1));
+    satelliteTime = (time_t*)malloc(sizeof(time_t) * (size - 1));
 
 	int i;
 	for (i = 0; i < size-1; i++) {
-		satellite_temp[i] = THRESHOLD;
-		satellite_time[i] = time(NULL);
+		satelliteTemp[i] = THRESHOLD;
+		satelliteTime[i] = time(NULL);
 	}
 	
 	/* process command line arguments*/
@@ -87,7 +88,7 @@ int main(int argc, char *argv[]) {
 		dims[1] = ncols; /* number of columns */
 		
 		if( (nrows*ncols+1) != size) {
-			if( my_rank ==0) printf("ERROR: (nrows*ncols)= %d * %d + 1 = %d != %d\n", nrows, ncols, nrows*ncols+1, size);
+			if( myRank ==0) printf("ERROR: (nrows*ncols)= %d * %d + 1 = %d != %d\n", nrows, ncols, nrows*ncols+1, size);
 			MPI_Finalize(); 
 			return 0;
 		}
@@ -109,27 +110,27 @@ int main(int argc, char *argv[]) {
 	if(ierr != 0) printf("ERROR[%d] creating CART\n", ierr);
 	
 	
-	if (my_rank != size-1) {
+	if (myRank != size-1) {
 	    // Ground sensor code
 	    
 		/* find my coordinates in the cartesian communicator group */
-	    MPI_Cart_coords(comm2D, my_rank, ndims, coord); // coordinated is returned into the coord array
+	    MPI_Cart_coords(comm2D, myRank, ndims, coord); // coordinated is returned into the coord array
 	    /* use my cartesian coordinates to find my size in cartesian group*/
-	    MPI_Cart_rank(comm2D, coord, &my_cart_rank);
+	    MPI_Cart_rank(comm2D, coord, &myCartRank);
 
 		// Find adjacent ranks
 	    MPI_Cart_shift(comm2D, SHIFT_ROW, DISP, &adjacent[0], &adjacent[1]);
 	    MPI_Cart_shift(comm2D, SHIFT_COL, DISP, &adjacent[2], &adjacent[3]);
 		
 		pthread_t tid[2];
-		pthread_create(&tid[0], NULL, groundSensorListener, &my_rank);
-		pthread_create(&tid[1], NULL, groundSensorReading, &my_rank);
+		pthread_create(&tid[0], NULL, groundSensorListener, &myRank);
+		pthread_create(&tid[1], NULL, groundSensorReading, &myRank);
 		pthread_join(tid[0], NULL);
 		pthread_join(tid[1], NULL);
 
 
 		/*************************************************************************************/
-	    // MPI_Request send_request[4], receive_request[4], req;
+	    // MPI_Request sendRequest[4], receive_request[4], req;
         // MPI_Status send_status[4], receive_status[4];
         
 	    // sleep(my_rank);
@@ -138,7 +139,7 @@ int main(int argc, char *argv[]) {
 
 	    // MPI_Isend(&randomVal, 1, MPI_INT, base_station_rank, 0, MPI_COMM_WORLD, &req);
 		// for (int i = 0; i < 4; i++) {
-		// 	MPI_Isend(&randomVal, 1, MPI_INT, adjacent[i], 0, comm2D, &send_request[i]);
+		// 	MPI_Isend(&randomVal, 1, MPI_INT, adjacent[i], 0, comm2D, &sendRequest[i]);
 		// }
 	    // int reply[4] = {-1, -1, -1, -1};
 	    // int recvValL = -1, recvValR = -1, recvValT = -1, recvValB = -1;
@@ -146,7 +147,7 @@ int main(int argc, char *argv[]) {
 		// 	MPI_Irecv(&reply[i], 1, MPI_INT, adjacent[i], 0, comm2D, &receive_request[i]);
 		// }
 	    
-	    // MPI_Waitall(4, send_request, send_status);
+	    // MPI_Waitall(4, sendRequest, send_status);
 	    // MPI_Waitall(4, receive_request, receive_status);
 
 	    // printf("Global size: %d. Cart size: %d. Coord: (%d, %d). Random Val: %d. Recv Top: %d. Recv Bottom: %d. Recv Left: %d. Recv Right: %d.\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, reply[0], reply[1], reply[2], reply[3]);
@@ -165,8 +166,8 @@ int main(int argc, char *argv[]) {
 		pthread_join(tid[1], NULL);
     }
 	
-    free(satellite_temp);
-    free(satellite_time);
+    free(satelliteTemp);
+    free(satelliteTime);
     
     MPI_Type_free(&ReportType);
 	MPI_Finalize();
@@ -185,7 +186,7 @@ void *baseStationListener(void *arg) {
     int flag = 0; // false
     MPI_Status status;
     
-    while (terminate_flag == 0) {
+    while (terminateFlag == 0) {
         sleep(interval);
         MPI_Iprobe(MPI_ANY_SOURCE, REQUEST, MPI_COMM_WORLD, &flag, &status);
         /* If a report is received from a node */
@@ -195,80 +196,55 @@ void *baseStationListener(void *arg) {
 			printf("Base station: Report received from node %d\n", status.MPI_SOURCE);
             
             /* Compare with infrared satellite readings */
-			int false_alert = 1; // flag that indicates if the report does not match satellite readings
-            int node_sat_temp = satellite_temp[status.MPI_SOURCE];
-            if (recv.temp >= node_sat_temp - TOLERANCE && recv.temp <= node_sat_temp + TOLERANCE)
-                false_alert = 0;
+			int falseAlert = 1; // flag that indicates if the report does not match satellite readings
+            int nodeSatTemp = satelliteTemp[status.MPI_SOURCE]; // satellite temp reading for reporting node
+            if (recv.temp >= nodeSatTemp - TOLERANCE && recv.temp <= nodeSatTemp + TOLERANCE)
+                falseAlert = 0;
             
 			/* Log the report into a file */
 			/* Get adjacent coordinates received */
 			int coords[4][2];
 			for (int j = 0; j < 4; j++) {
-				int cur_coord[2] = {-1, -1};
+				int coord[2] = {-1, -1};
 				if (recv.adjacentRanks[j] >= 0) {
-					rankToCoord(recv.adjacentRanks[j], cur_coord);
-					//MPI_Cart_coords(comm2D, recv.adjacentRanks[j], 2, cur_coord);
+					rankToCoord(recv.adjacentRanks[j], coord);
 				}
-				coords[j][0] = cur_coord[0];
-				coords[j][1] = cur_coord[1];
+				coords[j][0] = coord[0];
+				coords[j][1] = coord[1];
 			}
 
 			/* Get reporting node coordinate */
-			int reporting_coord[2];
-			rankToCoord(status.MPI_SOURCE, reporting_coord);
-			//MPI_Cart_coords(comm2D, status.MPI_SOURCE, 2, reporting_coord);
+			int reportingCoord[2];
+			rankToCoord(status.MPI_SOURCE, reportingCoord);
 			
-			/* Format satellite time */
-			time_t node_sat_time = satellite_time[status.MPI_SOURCE];
-			struct tm* info_sat;
-			char buffer_sat[80];
-			//time(&node_sat_time);
-			info_sat = localtime(&node_sat_time);
-			strftime(buffer_sat, 80, "%A %Y/%m/%d %H:%M:%S", info_sat);
-			printf("%s\n", buffer_sat);
-			fflush(stdout);
-
-			/* Format log time */
-			time_t log_time = time(NULL);
-			struct tm* info_log;
-			char buffer_log[80];
-			//time(&log_time);
-			info_log = localtime(&log_time);
-			strftime(buffer_log, 80, "%A %Y/%m/%d %H:%M:%S", info_log);
-			printf("%s\n", buffer_log);
-			fflush(stdout);
-                
-            /* Format alert time */
-			time_t alert_time = recv.time;
-			struct tm* info_alert;
-			char buffer_alert[80];
-			//time(&alert_time);
-			info_alert = localtime(&alert_time);
-			strftime(buffer_alert, 80, "%A %Y/%m/%d %H:%M:%S", info_alert);
-
-			
+			/* Format time of alert, log, and satellite */
+			char bufferSat[80], bufferLog[80], bufferAlert[80];
+			timeToString(time(NULL), bufferLog);
+			timeToString(recv.time, bufferAlert);
+			timeToString(satelliteTime[status.MPI_SOURCE], bufferSat);
 			
 			FILE *fptr;
 			fptr = fopen("base-station-log.txt", "a");
 
 			fprintf(fptr, "------------------------------------------------\n");
 			fprintf(fptr, "Iteration: %d\n", i);
-			fprintf(fptr, "Logged time: %s\n", buffer_log);
-			fprintf(fptr, "Alert time: %s\n\n", buffer_alert);
+			fprintf(fptr, "Logged time: %s\n", bufferLog);
+			fprintf(fptr, "Alert time: %s\n", bufferAlert);
+			fprintf(fptr, "Alert type: %s\n\n", (falseAlert == 1) ? "False" : "True");
+
 			fprintf(fptr, "Reporting Node\t\tCoord\tTemp\n");
-	    	fprintf(fptr, "%d\t\t\t\t\t(%d,%d)\t%d\n\n", status.MPI_SOURCE, reporting_coord[0], reporting_coord[1], recv.temp);
+	    	fprintf(fptr, "%d\t\t\t\t\t(%d,%d)\t%d\n\n", status.MPI_SOURCE, reportingCoord[0], reportingCoord[1], recv.temp);
 			fprintf(fptr, "Adjacent Nodes Temp\tCoord\tTemp\n");
 			int i;
 			for (i = 0; i < 4; i++)
 				if (recv.adjacentRanks[i] >= 0)
 					fprintf(fptr, "%d\t\t\t\t\t(%d,%d)\t%d\n", recv.adjacentRanks[i], coords[i][0], coords[i][1], recv.adjacentTemps[i]);
-			
-			fprintf(fptr, "\nInfrared satellite reporting time: %s\n", buffer_sat);
-			fprintf(fptr, "Infrared satellite reporting: %d\n", node_sat_temp);
-			fprintf(fptr, "Infrared satellite reporting coord: (%d,%d)\n\n", reporting_coord[0], reporting_coord[1]);
+
+			fprintf(fptr, "\nInfrared satellite reporting time: %s\n", bufferSat);
+			fprintf(fptr, "Infrared satellite reporting: %d\n", nodeSatTemp);
+			fprintf(fptr, "Infrared satellite reporting coord: (%d,%d)\n\n", reportingCoord[0], reportingCoord[1]);
 
 			fprintf(fptr, "Number of adjacent matches to reporting node: %d\n", recv.msg);
-
 			fprintf(fptr, "------------------------------------------------\n");
 
 			fflush(fptr);
@@ -277,7 +253,7 @@ void *baseStationListener(void *arg) {
         }
         
         if (i == intervalNum) {
-            terminate_flag = 1;
+            terminateFlag = 1;
             int i;
             MPI_Request terminate_requests[(*size)-1]; 
             MPI_Request terminate_statuses[(*size)-1]; 
@@ -306,7 +282,7 @@ void *infraredSatellite(void *arg) {
     time_t now;
 
     /* Generate random row, col and temperature */
-    while (terminate_flag == 0) {
+    while (terminateFlag == 0) {
 		sleep(5);
 		printf("Satellite: Generates temp\n");
 		fflush(stdout);
@@ -315,10 +291,10 @@ void *infraredSatellite(void *arg) {
         now = time(NULL);
 		rand_node = rand_r(&seed) % (*size-1);
 
-        satellite_temp[rand_node] = temp;
-        satellite_time[rand_node] = now;
+        satelliteTemp[rand_node] = temp;
+        satelliteTime[rand_node] = now;
 		/* Format log time */
-		time_t log_time = satellite_time[rand_node];
+		time_t log_time = satelliteTime[rand_node];
 		struct tm* info_log;
 		char buffer_log[80];
 		time(&log_time);
@@ -340,10 +316,10 @@ void *groundSensorListener(void *arg) {
     int temp_recv;
 
     MPI_Status stats;
-    MPI_Iprobe(MPI_ANY_SOURCE, TERMINATE, MPI_COMM_WORLD, &terminate_flag, &stats);
+    MPI_Iprobe(MPI_ANY_SOURCE, TERMINATE, MPI_COMM_WORLD, &terminateFlag, &stats);
 
-	while(terminate_flag == 0) {
-		MPI_Request send_request, recv_request;
+	while(terminateFlag == 0) {
+		MPI_Request sendRequest, recv_request;
 		MPI_Status send_status, recv_status;
 
 		MPI_Irecv(&temp_recv, 1, MPI_INT, MPI_ANY_SOURCE, REQUEST, comm2D, &recv_request);
@@ -352,8 +328,8 @@ void *groundSensorListener(void *arg) {
 		// printf("Sensor %d: Request received from sensor %d\n", *rank, recv_status.MPI_SOURCE);
 		// fflush(stdout);
 
-		MPI_Isend(&temp, 1, MPI_INT, recv_status.MPI_SOURCE, REPLY, comm2D, &send_request);
-		MPI_Wait(&send_request, &send_status);
+		MPI_Isend(&temp, 1, MPI_INT, recv_status.MPI_SOURCE, REPLY, comm2D, &sendRequest);
+		MPI_Wait(&sendRequest, &send_status);
 
 		printf("Sensor %d: Reply sent to sensor %d\n", *rank, recv_status.MPI_SOURCE);
 		fflush(stdout);
@@ -373,8 +349,8 @@ void *groundSensorReading(void *arg) {
 	printf("Sensor %d: Initialise reading\n", *rank);
 	fflush(stdout);
 
-	while (terminate_flag == 0) {
-		MPI_Request send_request[4], recv_request[4];
+	while (terminateFlag == 0) {
+		MPI_Request sendRequest[4], recv_request[4];
 		MPI_Status send_status[4], recv_status[4];
 
 		// Initialise replies received to -1
@@ -392,7 +368,7 @@ void *groundSensorReading(void *arg) {
 
 			// Send request to adjacent nodes for their temps
 			for (i = 0; i < 4; i++)
-				MPI_Isend(&temp, 1, MPI_INT, adjacent[i], REQUEST, comm2D, &send_request[i]);
+				MPI_Isend(&temp, 1, MPI_INT, adjacent[i], REQUEST, comm2D, &sendRequest[i]);
 			// Wait for reply for adjacent nodes
 			for (i = 0; i < 4; i++)
 				MPI_Irecv(&reply[i], 1, MPI_INT, adjacent[i], REPLY, comm2D, &recv_request[i]);
@@ -402,7 +378,7 @@ void *groundSensorReading(void *arg) {
 			fflush(stdout);
 			*/
 			
-			MPI_Waitall(4, send_request, send_status);
+			MPI_Waitall(4, sendRequest, send_status);
 			MPI_Waitall(4, recv_request, recv_status);
 			
 			printf("Sensor %d: Replies received, top: %d, bottom:%d, left:%d, right:%d\n", *rank, reply[0], reply[1], reply[2], reply[3]);
@@ -443,6 +419,13 @@ void *groundSensorReading(void *arg) {
 }
 
 void rankToCoord(int rank, int *coords) {
+	/* Convert rank to coordinates */
 	coords[0] = rank / ncols;
 	coords[1] = rank % ncols;
+}
+
+void timeToString(time_t rawTime, char *buffer) {
+	struct tm* info;
+	info = localtime(&rawTime);
+	strftime(buffer, 80, "%A %Y/%m/%d %H:%M:%S", info);
 }

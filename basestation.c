@@ -5,13 +5,35 @@
 #define TERMINATE 2
 #define THRESHOLD 80
 #define TOLERANCE 5
+#define MAX_IP 16
+#define MAX_MAC 18
 
 extern MPI_Datatype ReportType;
 
 int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, int nCols) {
-	int worldSize, myRank;
+	int worldSize, myRank, i;
+	char **ip, **mac;
+	struct timespec end;
 	MPI_Comm_rank(worldComm, &myRank);
 	MPI_Comm_size(worldComm, &worldSize);
+
+	ip = malloc(nRows*nCols * sizeof(char*));
+	mac = malloc(nRows*nCols * sizeof(char*));
+	for (i = 0; i < nRows*nCols; i++) {
+		ip[i] = malloc(MAX_IP * sizeof(char));
+		mac[i] = malloc(MAX_MAC * sizeof(char));
+	}
+
+	MPI_Request reqIP[nRows*nCols], reqMac[nRows*nCols];
+	MPI_Status statIP[nRows*nCols], statMac[nRows*nCols];
+
+	for (i = 0; i < nRows*nCols; i++) {
+		MPI_Irecv(ip[i], MAX_IP, MPI_CHAR, i, 3, worldComm, &reqIP[i]);
+		MPI_Irecv(mac[i], MAX_MAC, MPI_CHAR, i, 4, worldComm, &reqMac[i]);
+	}
+
+	MPI_Waitall(nRows*nCols, reqIP, statIP);
+	MPI_Waitall(nRows*nCols, reqMac, statMac);
 
 	/* Construct shared variables for base station and infrared satellite */
 	SharedBaseStation *shared = malloc(sizeof(SharedBaseStation));
@@ -28,6 +50,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 	/* Create a separate thread for the infrared satellite */
 	pthread_t tid;
 	pthread_create(&tid, NULL, infraredSatellite, shared);
+
 
 	/*-------------------- Base station listener code --------------------*/
     int interval = 50;
@@ -46,6 +69,9 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
             Report recv;
             MPI_Recv(&recv, 1, ReportType, status.MPI_SOURCE, REQUEST, worldComm, &status);
 			printf("Base station: Report received from node %d\n", status.MPI_SOURCE);
+			clock_gettime(CLOCK_REALTIME, &end);
+			double commTime = (end.tv_sec - recv.sec) * 1e9;
+			commTime = (commTime + (end.tv_nsec - recv.nsec)) * 1e-9;
 			numAlerts += 1;
             
             /* Compare with infrared satellite readings */
@@ -84,19 +110,20 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 			fprintf(fptr, "Alert time: %s\n", bufferAlert);
 			fprintf(fptr, "Alert type: %s\n\n", (falseAlert == 1) ? "False" : "True");
 
-			fprintf(fptr, "Reporting Node\t\tCoord\tTemp\n");
-	    	fprintf(fptr, "%d\t\t\t\t\t(%d,%d)\t%d\n\n", status.MPI_SOURCE, reportingCoord[0], reportingCoord[1], recv.temp);
-			fprintf(fptr, "Adjacent Nodes Temp\tCoord\tTemp\n");
+			fprintf(fptr, "Reporting Node\t\tCoord\tTemp\tIP\t\t\t\t\tMAC\n");
+	    	fprintf(fptr, "%d\t\t\t\t\t(%d,%d)\t%d\t\t%s\t\t\t%s\n\n", status.MPI_SOURCE, reportingCoord[0], reportingCoord[1], recv.temp, ip[status.MPI_SOURCE], mac[status.MPI_SOURCE]);
+			fprintf(fptr, "Adjacent Nodes Temp\tCoord\tTemp\tIP\t\t\t\t\tMAC\n");
 			int i;
 			for (i = 0; i < 4; i++)
 				if (recv.adjacentRanks[i] >= 0)
-					fprintf(fptr, "%d\t\t\t\t\t(%d,%d)\t%d\n", recv.adjacentRanks[i], coords[i][0], coords[i][1], recv.adjacentTemps[i]);
+					fprintf(fptr, "%d\t\t\t\t\t(%d,%d)\t%d\t\t%s\t\t\t%s\n", recv.adjacentRanks[i], coords[i][0], coords[i][1], recv.adjacentTemps[i], ip[recv.adjacentRanks[i]], mac[recv.adjacentRanks[i]]);
 
 			fprintf(fptr, "\nInfrared satellite reporting time: %s\n", bufferSat);
 			fprintf(fptr, "Infrared satellite reporting: %d\n", nodeSatTemp);
 			fprintf(fptr, "Infrared satellite reporting coord: (%d,%d)\n\n", reportingCoord[0], reportingCoord[1]);
 
 			fprintf(fptr, "Number of adjacent matches to reporting node: %d\n", recv.msg);
+			fprintf(fptr, "Communication time: %f\n", commTime);
 			fprintf(fptr, "------------------------------------------------\n");
 
 			fflush(fptr);
@@ -140,4 +167,3 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 	free(shared->satelliteTime);
 	pthread_join(tid, NULL);
 }
-

@@ -5,18 +5,13 @@
 
 typedef struct report {
 	time_t time;
+	time_t sec;
+	long nsec;
 	int temp;
 	int msg;
 	int adjacentRanks[4];
 	int adjacentTemps[4];
 } Report;
-
-typedef struct sharedNode {
-	int temp;
-	int terminateFlag;
-	int rank; // temporary
-	MPI_Comm comm;
-} SharedNode;
 
 typedef struct sharedBaseStation {
 	int *satelliteTemp;

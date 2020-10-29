@@ -21,16 +21,18 @@ int main(int argc, char *argv[]) {
 	MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
 
 	/* Create custom MPI datatype for reports */
-	int blocksCount = 5;
-	int blocksLen[5] = {1, 1, 1, 4, 4};
-	MPI_Datatype types[5] = {MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
-	MPI_Aint offsets[5];
+	int blocksCount = 7;
+	int blocksLen[7] = {1, 1, 1, 1, 1, 4, 4};
+	MPI_Datatype types[7] = {MPI_DOUBLE, MPI_DOUBLE, MPI_LONG, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
+	MPI_Aint offsets[7];
 	
 	offsets[0] = offsetof(Report, time);
-	offsets[1] = offsetof(Report, temp);
-	offsets[2] = offsetof(Report, msg);
-	offsets[3] = offsetof(Report, adjacentRanks);
-	offsets[4] = offsetof(Report, adjacentTemps);
+	offsets[1] = offsetof(Report, sec);
+	offsets[2] = offsetof(Report, nsec);
+	offsets[3] = offsetof(Report, temp);
+	offsets[4] = offsetof(Report, msg);
+	offsets[5] = offsetof(Report, adjacentRanks);
+	offsets[6] = offsetof(Report, adjacentTemps);
 	
 	MPI_Type_create_struct(blocksCount, blocksLen, offsets, types, &ReportType);
 	MPI_Type_commit(&ReportType);

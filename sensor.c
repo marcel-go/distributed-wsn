@@ -8,7 +8,9 @@
 #define TERMINATE 2
 #define THRESHOLD 80
 #define TOLERANCE 5
-#define INTERVAL 50
+#define INTERVAL 100
+#define MAX_IP 16
+#define MAX_MAC 18
 
 extern MPI_Datatype ReportType;
 
@@ -23,11 +25,22 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 	MPI_Comm_size(comm, &size);
 	MPI_Comm_rank(comm, &myRank);
 
-	/* create cartesian topology for processes */
+	char bufferIP[MAX_IP], bufferMac[MAX_MAC];
+	getIP(bufferIP);
+	getMac(bufferMac);
+	// printf("IP Address: %s\nMac Address: %s\n", bufferIP, bufferMac);
+
+	// Send IP address and Mac adress of the sensor node to base station
+	MPI_Request sendRequest[2];
+	MPI_Status sendStatus[2];
+	MPI_Isend(bufferIP, MAX_IP, MPI_CHAR, worldSize-1, 3, worldComm, &sendRequest[0]);
+	MPI_Isend(bufferMac, MAX_MAC, MPI_CHAR, worldSize-1, 4, worldComm, &sendRequest[1]);
+	MPI_Waitall(2, sendRequest, sendStatus);
+
+	/* Create cartesian topology for processes */
 	dims[0] = nRows;
 	dims[1] = nCols;
 	MPI_Dims_create(size, ndims, dims);
-	/* create cartesian mapping */
 	wrapAround[0] = 0;
 	wrapAround[1] = 0;
 	ierr = MPI_Cart_create(comm, ndims, dims, wrapAround, reorder, &comm2D);
@@ -50,17 +63,15 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 
 	msleep(myRank);
 
-	struct timespec ts;
+	struct timespec ts, start, end;
+
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	srand((time_t)ts.tv_nsec);
-
-	// printf("Sensor %d: Initialise reading\n", myRank);
-	// fflush(stdout);
 
 	int tempRecv, requestMsg, replyMsg, replyCount;
 	int waiting = 0;
 
-	MPI_Request sendRequest, sendRequestReq[4];
+	MPI_Request reqSendReply, reqSendReport, reqSendRequest[4];
 	MPI_Status recvStatus, replyStatus;
 
 	while (terminateFlag == 0) {
@@ -77,14 +88,17 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 		// Send reply immediately to requesting node
 		if (requestMsg == 1) {
 			MPI_Recv(&tempRecv, 1, MPI_INT, recvStatus.MPI_SOURCE, REQUEST, comm2D, MPI_STATUS_IGNORE);
-			MPI_Isend(&temp, 1, MPI_INT, recvStatus.MPI_SOURCE, REPLY, comm2D, &sendRequest);
+			MPI_Isend(&temp, 1, MPI_INT, recvStatus.MPI_SOURCE, REPLY, comm2D, &reqSendReply);
 		}
 
 		if (temp > THRESHOLD && waiting == 0) {
+			// Measure time since alert is detected
+			clock_gettime(CLOCK_REALTIME, &start);
+
 			// Send request to adjacent nodes for their temps
 			for (i = 0; i < 4; i++)
 				if (adjacent[i] >= 0)
-					MPI_Isend(&temp, 1, MPI_INT, adjacent[i], REQUEST, comm2D, &sendRequestReq[i]);
+					MPI_Isend(&temp, 1, MPI_INT, adjacent[i], REQUEST, comm2D, &reqSendRequest[i]);
 			waiting = 1;
 			replyCount = 0;
 		}
@@ -117,6 +131,8 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 					/* Construct report */
 					Report send;
 					send.time = time(NULL);
+					send.sec = start.tv_sec;
+					send.nsec = start.tv_nsec;
 					send.temp = temp;
 					send.msg = withinRangeCount;
 					for (i = 0; i < 4; i++) {
@@ -125,8 +141,7 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 					}
 
 					/* Send message to base station on size worldSize-1 */
-					MPI_Request sendRequest;
-					MPI_Isend(&send, 1, ReportType, worldSize-1, REQUEST, worldComm, &sendRequest);
+					MPI_Isend(&send, 1, ReportType, worldSize-1, REQUEST, worldComm, &reqSendReport);
 				}
 
 				// Reset replies received

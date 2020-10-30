@@ -7,6 +7,7 @@
 #define TOLERANCE 5
 #define MAX_IP 16
 #define MAX_MAC 18
+#define INTERVAL 50
 
 extern MPI_Datatype ReportType;
 
@@ -14,6 +15,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 	int worldSize, myRank, i;
 	char **ip, **mac;
 	struct timespec end;
+	double totalCommTime = 0;
 	MPI_Comm_rank(worldComm, &myRank);
 	MPI_Comm_size(worldComm, &worldSize);
 
@@ -23,17 +25,6 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 		ip[i] = malloc(MAX_IP * sizeof(char));
 		mac[i] = malloc(MAX_MAC * sizeof(char));
 	}
-
-	MPI_Request reqIP[nRows*nCols], reqMac[nRows*nCols];
-	MPI_Status statIP[nRows*nCols], statMac[nRows*nCols];
-
-	for (i = 0; i < nRows*nCols; i++) {
-		MPI_Irecv(ip[i], MAX_IP, MPI_CHAR, i, 3, worldComm, &reqIP[i]);
-		MPI_Irecv(mac[i], MAX_MAC, MPI_CHAR, i, 4, worldComm, &reqMac[i]);
-	}
-
-	MPI_Waitall(nRows*nCols, reqIP, statIP);
-	MPI_Waitall(nRows*nCols, reqMac, statMac);
 
 	/* Construct shared variables for base station and infrared satellite */
 	SharedBaseStation *shared = malloc(sizeof(SharedBaseStation));
@@ -53,25 +44,38 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 
 
 	/*-------------------- Base station listener code --------------------*/
-    int interval = 50;
 	int iteration = 0, numAlerts = 0, numTrueAlerts = 0;
-    int flag = 0; // false
+    int reportFlag = 0;
     MPI_Status status;
 
 	FILE *fptr;
 	fptr = fopen("base-station-log.txt", "w");
     
+	MPI_Request reqIP[nRows*nCols], reqMac[nRows*nCols];
+	MPI_Status statIP[nRows*nCols], statMac[nRows*nCols];
+
+	for (i = 0; i < nRows*nCols; i++) {
+		MPI_Irecv(ip[i], MAX_IP, MPI_CHAR, i, 3, worldComm, &reqIP[i]);
+		MPI_Irecv(mac[i], MAX_MAC, MPI_CHAR, i, 4, worldComm, &reqMac[i]);
+	}
+
+	MPI_Waitall(nRows*nCols, reqIP, statIP);
+	MPI_Waitall(nRows*nCols, reqMac, statMac);
+
     while (shared->terminateFlag == 0) {
-        msleep(interval);
-        MPI_Iprobe(MPI_ANY_SOURCE, REQUEST, worldComm, &flag, &status);
+        msleep(INTERVAL);
+        MPI_Iprobe(MPI_ANY_SOURCE, REQUEST, worldComm, &reportFlag, &status);
         /* If a report is received from a node */
-        if (flag == 1) {
+        if (reportFlag == 1) {
             Report recv;
             MPI_Recv(&recv, 1, ReportType, status.MPI_SOURCE, REQUEST, worldComm, &status);
-			printf("Base station: Report received from node %d\n", status.MPI_SOURCE);
+			// printf("Base station: Report received from node %d\n", status.MPI_SOURCE);
+
+			// Calculate total communication time between reporting node and base station
 			clock_gettime(CLOCK_REALTIME, &end);
 			double commTime = (end.tv_sec - recv.sec) * 1e9;
 			commTime = (commTime + (end.tv_nsec - recv.nsec)) * 1e-9;
+			totalCommTime += commTime;
 			numAlerts += 1;
             
             /* Compare with infrared satellite readings */
@@ -128,7 +132,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 
 			fflush(fptr);
 
-			flag = 0;
+			reportFlag = 0;
         }
         
         if (iteration == nIntervals) {
@@ -152,7 +156,8 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 			
 			fprintf(pOutfile, "Terminated on %s\n", buffer);
 			fprintf(pOutfile, "Number of true alerts: %d\n", numTrueAlerts);
-			fprintf(pOutfile, "Number of false alerts: %d", numAlerts - numTrueAlerts);
+			fprintf(pOutfile, "Number of false alerts: %d\n", numAlerts - numTrueAlerts);
+			fprintf(pOutfile, "Total communication time: %f\n", totalCommTime);
 
 			fflush(pOutfile);
 			fclose(pOutfile);

@@ -8,7 +8,7 @@
 #define TERMINATE 2
 #define THRESHOLD 80
 #define TOLERANCE 5
-#define INTERVAL 100
+#define INTERVAL 50
 #define MAX_IP 16
 #define MAX_MAC 18
 
@@ -35,7 +35,6 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 	MPI_Status sendStatus[2];
 	MPI_Isend(bufferIP, MAX_IP, MPI_CHAR, worldSize-1, 3, worldComm, &sendRequest[0]);
 	MPI_Isend(bufferMac, MAX_MAC, MPI_CHAR, worldSize-1, 4, worldComm, &sendRequest[1]);
-	MPI_Waitall(2, sendRequest, sendStatus);
 
 	/* Create cartesian topology for processes */
 	dims[0] = nRows;
@@ -74,6 +73,8 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 	MPI_Request reqSendReply, reqSendReport, reqSendRequest[4];
 	MPI_Status recvStatus, replyStatus;
 
+	MPI_Waitall(2, sendRequest, sendStatus);
+
 	while (terminateFlag == 0) {
 		msleep(INTERVAL);
 
@@ -92,8 +93,6 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 		}
 
 		if (temp > THRESHOLD && waiting == 0) {
-			// Measure time since alert is detected
-			clock_gettime(CLOCK_REALTIME, &start);
 
 			// Send request to adjacent nodes for their temps
 			for (i = 0; i < 4; i++)
@@ -127,6 +126,9 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 
 				/* An event is confirmed with adjacent nodes */
 				if (withinRangeCount >= 2) {
+					// Measure time since report is about to be sent
+					clock_gettime(CLOCK_REALTIME, &start);
+
 					/* Send a report to the base station */
 					/* Construct report */
 					Report send;

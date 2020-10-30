@@ -49,7 +49,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
     MPI_Status status;
 
 	FILE *fptr;
-	fptr = fopen("base-station-log.txt", "w");
+	fptr = fopen("alerts.log", "w");
     
 	MPI_Request reqIP[nRows*nCols], reqMac[nRows*nCols];
 	MPI_Status statIP[nRows*nCols], statMac[nRows*nCols];
@@ -152,7 +152,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 
 			/* Write report summary */
 			FILE *pOutfile;
-			pOutfile = fopen("base-station-summary.txt", "w");
+			pOutfile = fopen("summary.log", "w");
 			
 			fprintf(pOutfile, "Terminated on %s\n", buffer);
 			fprintf(pOutfile, "Number of true alerts: %d\n", numTrueAlerts);

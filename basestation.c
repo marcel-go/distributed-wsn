@@ -128,7 +128,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 			fprintf(fptr, "Infrared satellite reporting coord: (%d,%d)\n\n", reportingCoord[0], reportingCoord[1]);
 
 			fprintf(fptr, "Communication time: %f\n", commTime);
-			fprintf(fptr, "Total Messages send between reporting node and base station: 1"); // Each alert sends 1 message between node and base station
+			fprintf(fptr, "Total messages send between reporting node and base station: 1\n"); // Each alert sends 1 message between node and base station
 			fprintf(fptr, "Number of adjacent matches to reporting node: %d\n", recv.msg);
 			
 			fprintf(fptr, "------------------------------------------------\n");

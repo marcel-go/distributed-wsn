@@ -59,6 +59,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 		MPI_Irecv(mac[i], MAX_MAC, MPI_CHAR, i, 4, worldComm, &reqMac[i]);
 	}
 
+	// Wait for all nodes to finish initialisation
 	MPI_Waitall(nRows*nCols, reqIP, statIP);
 	MPI_Waitall(nRows*nCols, reqMac, statMac);
 

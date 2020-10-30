@@ -15,26 +15,24 @@
 extern MPI_Datatype ReportType;
 
 int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
-	/* Ground sensor code */
 	int ndims = 2, myRank, myCartRank, size, worldSize, reorder = 0, ierr = 0, valid = 0, i;
 	int coord[ndims], dims[ndims], wrapAround[ndims];
 	int adjacent[4], reply[4];
-	MPI_Comm comm2D;
+	char bufferIP[MAX_IP], bufferMac[MAX_MAC]; // Buffer to store IP and Mac addresses
+	MPI_Comm comm2D; // Communicator withing 2D cartesian grid
 
 	MPI_Comm_size(worldComm, &worldSize);
 	MPI_Comm_size(comm, &size);
 	MPI_Comm_rank(comm, &myRank);
 
-	char bufferIP[MAX_IP], bufferMac[MAX_MAC];
+	
 	getIP(bufferIP);
 	getMac(bufferMac);
-	// printf("IP Address: %s\nMac Address: %s\n", bufferIP, bufferMac);
 
 	// Send IP address and Mac adress of the sensor node to base station
-	MPI_Request sendRequest[2];
-	MPI_Status sendStatus[2];
-	MPI_Isend(bufferIP, MAX_IP, MPI_CHAR, worldSize-1, 3, worldComm, &sendRequest[0]);
-	MPI_Isend(bufferMac, MAX_MAC, MPI_CHAR, worldSize-1, 4, worldComm, &sendRequest[1]);
+	MPI_Request reqIPMac[2];
+	MPI_Isend(bufferIP, MAX_IP, MPI_CHAR, worldSize-1, 3, worldComm, &reqIPMac[0]);
+	MPI_Isend(bufferMac, MAX_MAC, MPI_CHAR, worldSize-1, 4, worldComm, &reqIPMac[1]);
 
 	/* Create cartesian topology for processes */
 	dims[0] = nRows;
@@ -73,7 +71,7 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 	MPI_Request reqSendReply, reqSendReport, reqSendRequest[4];
 	MPI_Status recvStatus, replyStatus;
 
-	MPI_Waitall(2, sendRequest, sendStatus);
+	MPI_Waitall(2, reqIPMac, MPI_STATUSES_IGNORE);
 
 	while (terminateFlag == 0) {
 		msleep(INTERVAL);

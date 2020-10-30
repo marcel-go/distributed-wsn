@@ -44,7 +44,7 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 
 
 	/*-------------------- Base station listener code --------------------*/
-	int iteration = 0, numAlerts = 0, numTrueAlerts = 0;
+	int iteration = 1, numAlerts = 0, numTrueAlerts = 0;
     int reportFlag = 0;
     MPI_Status status;
 

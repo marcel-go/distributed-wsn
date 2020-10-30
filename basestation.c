@@ -127,8 +127,10 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 			fprintf(fptr, "Infrared satellite reporting: %d\n", nodeSatTemp);
 			fprintf(fptr, "Infrared satellite reporting coord: (%d,%d)\n\n", reportingCoord[0], reportingCoord[1]);
 
-			fprintf(fptr, "Number of adjacent matches to reporting node: %d\n", recv.msg);
 			fprintf(fptr, "Communication time: %f\n", commTime);
+			fprintf(fptr, "Total Messages send between reporting node and base station: 1"); // Each alert sends 1 message between node and base station
+			fprintf(fptr, "Number of adjacent matches to reporting node: %d\n", recv.msg);
+			
 			fprintf(fptr, "------------------------------------------------\n");
 
 			fflush(fptr);
@@ -155,10 +157,19 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 			FILE *pOutfile;
 			pOutfile = fopen("summary.log", "w");
 			
-			fprintf(pOutfile, "Terminated on %s\n", buffer);
+			fprintf(pOutfile, "Base station terminated successfully on %s\n", buffer);
+			fprintf(pOutfile, "Number of messages passed through the network: %d", numAlerts);
 			fprintf(pOutfile, "Number of true alerts: %d\n", numTrueAlerts);
 			fprintf(pOutfile, "Number of false alerts: %d\n", numAlerts - numTrueAlerts);
-			fprintf(pOutfile, "Total communication time: %f\n", totalCommTime);
+			fprintf(pOutfile, "Total communication time (seconds): %f\n", totalCommTime);
+
+			// Print summary to console
+			printf("Base station terminated successfully on %s\n", buffer);
+			printf("Number of messages passed through the network: %d", numAlerts);
+			printf("Number of true alerts: %d\n", numTrueAlerts);
+			printf("Number of false alerts: %d\n", numAlerts - numTrueAlerts);
+			printf("Total communication time (seconds): %f\n", totalCommTime);
+			fflush(stdout);
 
 			fflush(pOutfile);
 			fclose(pOutfile);

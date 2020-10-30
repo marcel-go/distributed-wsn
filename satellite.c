@@ -19,7 +19,7 @@ void *infraredSatellite(void *arg) {
     while (shared->terminateFlag == 0) {
 		msleep(INTERVAL);
 
-		int temp = rand() % 20 + 80;
+		int temp = rand() % 40 + 60;
         now = time(NULL);
 		rand_node = rand() % (size-1);
 

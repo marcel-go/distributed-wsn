@@ -8,7 +8,7 @@
 #define TERMINATE 2
 #define THRESHOLD 80
 #define TOLERANCE 5
-#define INTERVAL 50
+#define INTERVAL 90
 #define MAX_IP 16
 #define MAX_MAC 18
 
@@ -82,7 +82,7 @@ int sensorNode(MPI_Comm worldComm, MPI_Comm comm, int nRows, int nCols) {
 
 		/* Sensor generates reading */
 		if (waiting == 0)
-			temp = rand() % 10 + 85;
+			temp = rand() % 40 + 60;
 
 		// Send reply immediately to requesting node
 		if (requestMsg == 1) {

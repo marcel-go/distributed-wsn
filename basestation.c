@@ -158,14 +158,14 @@ int baseStation(MPI_Comm worldComm, MPI_Comm comm, int nIntervals, int nRows, in
 			pOutfile = fopen("summary.log", "w");
 			
 			fprintf(pOutfile, "Base station terminated successfully on %s\n", buffer);
-			fprintf(pOutfile, "Number of messages passed through the network: %d", numAlerts);
+			fprintf(pOutfile, "Number of messages passed through the network: %d\n", numAlerts);
 			fprintf(pOutfile, "Number of true alerts: %d\n", numTrueAlerts);
 			fprintf(pOutfile, "Number of false alerts: %d\n", numAlerts - numTrueAlerts);
 			fprintf(pOutfile, "Total communication time (seconds): %f\n", totalCommTime);
 
 			// Print summary to console
 			printf("Base station terminated successfully on %s\n", buffer);
-			printf("Number of messages passed through the network: %d", numAlerts);
+			printf("Number of messages passed through the network: %d\n", numAlerts);
 			printf("Number of true alerts: %d\n", numTrueAlerts);
 			printf("Number of false alerts: %d\n", numAlerts - numTrueAlerts);
 			printf("Total communication time (seconds): %f\n", totalCommTime);

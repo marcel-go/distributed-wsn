@@ -1,10 +1,11 @@
 #include "satellite.h"
 
+#define INTERVAL 50
+
 void *infraredSatellite(void *arg) {
 	SharedBaseStation *shared = (SharedBaseStation*)arg;
 	int size = shared->size;
 
-	int interval = 50;
     int rand_node;
     time_t now;
 
@@ -16,7 +17,7 @@ void *infraredSatellite(void *arg) {
 
     /* Generate random row, col and temperature */
     while (shared->terminateFlag == 0) {
-		msleep(interval);
+		msleep(INTERVAL);
 
 		int temp = rand() % 20 + 80;
         now = time(NULL);

@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
 			return 0;
 		}
 	} else {
-		printf("ERROR: Wrong arguments\n");
+		if (myRank == 0) printf("ERROR: Wrong arguments\n");
 		MPI_Finalize(); 
 		return 0;
 	}

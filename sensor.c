@@ -8,7 +8,7 @@
 #define TERMINATE 2
 #define THRESHOLD 80
 #define TOLERANCE 5
-#define INTERVAL 80
+#define INTERVAL 70
 #define MAX_IP 16
 #define MAX_MAC 18
 

@@ -1,4 +1,4 @@
-TARGET = sensorsim.out
+TARGET = wsn_sim.out
 
 OBJS = basestation.o \
 	network.o \

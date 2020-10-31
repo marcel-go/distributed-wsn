@@ -2,7 +2,7 @@
 
 /*
 Function to get IP adress of the interface "eth0"
-Source https://www.geekpage.jp/en/programming/linux-network/get-ipaddr.php
+Source: https://www.geekpage.jp/en/programming/linux-network/get-ipaddr.php
 */
 void getIP(char *buffer) {
     int fd;

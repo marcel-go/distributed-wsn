@@ -6,25 +6,21 @@ void *infraredSatellite(void *arg) {
 	SharedBaseStation *shared = (SharedBaseStation*)arg;
 	int size = shared->size;
 
-    int rand_node;
-    time_t now;
-
+	/* Sleep by size to seed the rand() function */
 	msleep(size);
-	
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	srand((time_t)ts.tv_nsec);
+	struct timespec seed;
+	clock_gettime(CLOCK_MONOTONIC, &seed);
+	srand((time_t)seed.tv_nsec);
 
-    /* Generate random row, col and temperature */
+    /* Generate a random temperature for a random node */
     while (shared->terminateFlag == 0) {
 		msleep(INTERVAL);
 
-		int temp = rand() % 40 + 60;
-        now = time(NULL);
-		rand_node = rand() % (size-1);
+		int randTemp = rand() % 40 + 60;
+		int randNode = rand() % (size-1);
 
-        shared->satelliteTemp[rand_node] = temp;
-        shared->satelliteTime[rand_node] = now;
+        shared->satelliteTemp[randNode] = randTemp;
+        shared->satelliteTime[randNode] = time(NULL); // use now as the time
     }
     
 	return NULL;

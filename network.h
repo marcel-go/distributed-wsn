@@ -10,5 +10,4 @@
 #include <arpa/inet.h>
 
 void getIP(char* buffer);
-
 void getMac(char* buffer);
